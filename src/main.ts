@@ -1,10 +1,22 @@
-import { Editor, MarkdownFileInfo, MarkdownView, Notice, Platform, Plugin, TFile } from "obsidian";
+import {
+	Editor,
+	MarkdownFileInfo,
+	MarkdownView,
+	Notice,
+	type ObsidianProtocolData,
+	Platform,
+	Plugin,
+	TFile,
+} from "obsidian";
 import { parseUncompletedTasks, type ParsedTask } from "./parser";
 import {
+	buildBacklinkMarker,
 	buildObsidianUrl,
 	buildOmniAutomationUrlTree,
 	buildOmnifocusUrl,
 	buildPluginInvocationUrlTree,
+	CALLBACK_ACTION,
+	generateNonce,
 	type TaskTreeNode,
 } from "./omnifocus";
 import { DEFAULT_SETTINGS, type PluginSettings, SettingsTab } from "./settings";
@@ -54,6 +66,10 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 		});
 
 		this.addSettingTab(new SettingsTab(this.app, this));
+
+		this.registerObsidianProtocolHandler(CALLBACK_ACTION, (params) => {
+			void this.handleOmnifocusCallback(params);
+		});
 	}
 
 	async loadSettings() {
@@ -106,12 +122,25 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 		const trees = groupIntoTrees(tasks, baseTags, this.settings.appendInlineTagsAsOmnifocusTags);
 		const skipped: string[] = [];
 		let hierarchyFlattened = false;
+		const nonceByLine = new Map<number, string>();
 
 		for (const tree of trees) {
 			const hasChildren = tree.children.length > 0;
 			const needsOmniJs =
 				treeNeedsOmniJs(tree) || (preserveHierarchy && hasChildren);
 			const useOmniJs = omniJsModeAvailable && needsOmniJs;
+
+			if (this.settings.addOmnifocusBacklink) {
+				if (useOmniJs) {
+					forEachNode(tree, (node) => {
+						node.nonce = generateNonce();
+						nonceByLine.set(node.task.lineNumber, node.nonce);
+					});
+				} else {
+					tree.nonce = generateNonce();
+					nonceByLine.set(tree.task.lineNumber, tree.nonce);
+				}
+			}
 
 			let url: string;
 			if (useOmniJs && this.settings.sendMode === "plugin") {
@@ -127,6 +156,7 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 					project,
 					obsidianUrl,
 					autosave,
+					callback: tree.nonce ? { nonce: tree.nonce } : undefined,
 				});
 			}
 			window.open(url);
@@ -146,7 +176,7 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 			});
 		}
 
-		this.markTasksComplete(editor, tasks);
+		this.markTasksComplete(editor, tasks, nonceByLine);
 
 		const summary = `Sent ${tasks.length} task${tasks.length === 1 ? "" : "s"} to OmniFocus.`;
 		const notes: string[] = [];
@@ -187,7 +217,11 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 		return this.settings.defaultProject.trim();
 	}
 
-	private markTasksComplete(editor: Editor, tasks: ParsedTask[]): void {
+	private markTasksComplete(
+		editor: Editor,
+		tasks: ParsedTask[],
+		nonceByLine?: Map<number, string>
+	): void {
 		const lineSet = new Set<number>();
 		for (const task of tasks) {
 			for (const line of task.checkboxLines) lineSet.add(line);
@@ -196,10 +230,12 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 			.sort((a, b) => a - b)
 			.map((lineNum) => {
 				const line = editor.getLine(lineNum);
-				const newLine = line.replace(
+				let newLine = line.replace(
 					/^(\s*(?:[-*+]|\d+\.)\s+\[)\s(\])/,
 					"$1x$2"
 				);
+				const nonce = nonceByLine?.get(lineNum);
+				if (nonce) newLine += buildBacklinkMarker(nonce);
 				return {
 					from: { line: lineNum, ch: 0 },
 					to: { line: lineNum, ch: line.length },
@@ -208,6 +244,84 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 			});
 		editor.transaction({ changes });
 	}
+
+	private async handleOmnifocusCallback(params: ObsidianProtocolData): Promise<void> {
+		const entries = parseCallbackParams(params);
+		if (entries.length === 0) return;
+
+		let failedCount = 0;
+		for (const entry of entries) {
+			if (entry.failed) failedCount++;
+			await this.resolveBacklink(entry);
+		}
+		if (failedCount > 0) {
+			new Notice(
+				`OmniFocus reported ${failedCount} task${failedCount === 1 ? "" : "s"} not created; no backlink added.`
+			);
+		}
+	}
+
+	private async resolveBacklink(entry: CallbackEntry): Promise<void> {
+		const marker = buildBacklinkMarker(entry.nonce);
+		const file = await this.findFileWithMarker(marker);
+		if (!file) return;
+
+		const label = this.settings.omnifocusBacklinkLabel.trim() || DEFAULT_SETTINGS.omnifocusBacklinkLabel;
+		const replacement = entry.failed || !entry.result ? "" : ` [${label}](${entry.result})`;
+		await this.app.vault.process(file, (data) => spliceOutMarker(data, marker, replacement));
+	}
+
+	private async findFileWithMarker(marker: string): Promise<TFile | null> {
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if ((await this.app.vault.cachedRead(file)).includes(marker)) return file;
+		}
+		return null;
+	}
+}
+
+interface CallbackEntry {
+	nonce: string;
+	result?: string;
+	failed: boolean;
+}
+
+function parseCallbackParams(params: ObsidianProtocolData): CallbackEntry[] {
+	if (typeof params.batch === "string") {
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(params.batch);
+		} catch {
+			return [];
+		}
+		if (!Array.isArray(parsed)) return [];
+		return parsed
+			.filter(
+				(e): e is { nonce: string; result?: unknown } =>
+					!!e && typeof e === "object" && typeof (e as { nonce?: unknown }).nonce === "string"
+			)
+			.map((e) => ({
+				nonce: e.nonce,
+				result: typeof e.result === "string" ? e.result : undefined,
+				failed: false,
+			}));
+	}
+	if (typeof params.nonce === "string") {
+		const failed = params.status === "error" || params.status === "cancelled";
+		return [
+			{
+				nonce: params.nonce,
+				result: typeof params.result === "string" ? params.result : undefined,
+				failed,
+			},
+		];
+	}
+	return [];
+}
+
+function spliceOutMarker(data: string, marker: string, replacement: string): string {
+	const idx = data.indexOf(marker);
+	if (idx === -1) return data;
+	return data.slice(0, idx) + replacement + data.slice(idx + marker.length);
 }
 
 function dedupe<T>(arr: T[]): T[] {

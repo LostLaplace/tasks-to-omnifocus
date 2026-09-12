@@ -21,6 +21,8 @@ export interface PluginSettings {
 	skipQuickEntry: boolean;
 	sendMode: SendMode;
 	preserveHierarchy: boolean;
+	addOmnifocusBacklink: boolean;
+	omnifocusBacklinkLabel: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -32,6 +34,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	skipQuickEntry: false,
 	sendMode: "url",
 	preserveHierarchy: false,
+	addOmnifocusBacklink: false,
+	omnifocusBacklinkLabel: "🔗",
 };
 
 /** Resolve a `boolean | (() => boolean)` predicate, defaulting to `fallback`. */
@@ -179,6 +183,30 @@ export class SettingsTab extends PluginSettingTab {
 						desc: "When enabled, #tags written on the task line are added as OmniFocus tags (combined with default/frontmatter tags).",
 						aliases: ["hashtag", "inline tags"],
 						control: { type: "toggle", key: "appendInlineTagsAsOmnifocusTags" },
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Backlinks",
+				items: [
+					{
+						name: "Add OmniFocus backlink",
+						desc: "After OmniFocus confirms a task was created, insert a link to it back into the task's line in Obsidian. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in.",
+						aliases: ["backlink", "callback", "link back", "round trip", "x-success", "return link"],
+						control: { type: "toggle", key: "addOmnifocusBacklink" },
+					},
+					{
+						name: "Backlink label",
+						desc: "Text or emoji used as the clickable link label, e.g. \"🔗\" renders as [🔗](omnifocus:///task/…).",
+						aliases: ["link text", "link label", "emoji", "icon"],
+						control: {
+							type: "text",
+							key: "omnifocusBacklinkLabel",
+							placeholder: "🔗",
+							disabled: () => !this.plugin.settings.addOmnifocusBacklink,
+							validate: (value) => (value.trim() ? undefined : "Label cannot be empty."),
+						},
 					},
 				],
 			},

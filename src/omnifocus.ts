@@ -1,20 +1,50 @@
 import type { ParsedTask } from "./parser";
 
+export const CALLBACK_ACTION = "omnifocus-task-sync-callback";
+
+const BACKLINK_MARKER_RE = / %%t2of-[a-z0-9]+%%/g;
+
+/** Base-36 timestamp + random suffix. Charset is always `[a-z0-9]`, so the
+ * nonce can never break out of the `%%...%%` marker delimiter or need
+ * percent-encoding as a query value. Collision safety only needs to cover
+ * nonces in flight within one vault, so no crypto is needed. */
+export function generateNonce(): string {
+	const rand = Math.floor(Math.random() * 36 ** 6)
+		.toString(36)
+		.padStart(6, "0");
+	return `${Date.now().toString(36)}${rand}`;
+}
+
+/** Hidden Obsidian comment marker appended to a task's line while its
+ * OmniFocus backlink is pending. Invisible in Reading/Live Preview. The
+ * leading space is part of the constant. */
+export function buildBacklinkMarker(nonce: string): string {
+	return ` %%t2of-${nonce}%%`;
+}
+
+/** Defensively strips any stray backlink marker from note/payload body text.
+ * Guards against parser.ts's consumeIndentedBlock sweeping an unresolved
+ * marker on an already-checked child line into a different task's note. */
+function stripBacklinkMarkers(s: string): string {
+	return s.replace(BACKLINK_MARKER_RE, "");
+}
+
 export interface BuildUrlOpts {
 	task: ParsedTask;
 	tags: string[];
 	project: string;
 	obsidianUrl: string;
 	autosave: boolean;
+	callback?: { nonce: string };
 }
 
 export function buildOmnifocusUrl(opts: BuildUrlOpts): string {
-	const { task, tags, project, obsidianUrl, autosave } = opts;
+	const { task, tags, project, obsidianUrl, autosave, callback } = opts;
 	const params: [string, string][] = [];
 	params.push(["name", task.title]);
 
 	const noteParts: string[] = [];
-	const trimmedBody = task.body.trim();
+	const trimmedBody = stripBacklinkMarkers(task.body.trim());
 	if (trimmedBody) noteParts.push(trimmedBody);
 	noteParts.push(obsidianUrl);
 	params.push(["note", noteParts.join("\n\n")]);
@@ -29,7 +59,16 @@ export function buildOmnifocusUrl(opts: BuildUrlOpts): string {
 	}
 	if (autosave) params.push(["autosave", "true"]);
 
-	return `omnifocus:///add?${encodeQuery(params)}`;
+	if (!callback) {
+		return `omnifocus:///add?${encodeQuery(params)}`;
+	}
+
+	const base = `obsidian://${CALLBACK_ACTION}?nonce=${callback.nonce}`;
+	params.push(["x-success", base]);
+	params.push(["x-error", `${base}&status=error`]);
+	params.push(["x-cancel", `${base}&status=cancelled`]);
+
+	return `omnifocus://x-callback-url/add?${encodeQuery(params)}`;
 }
 
 export const PLUGIN_BOOTSTRAP_SCRIPT =
@@ -39,6 +78,7 @@ export interface TaskTreeNode {
 	task: ParsedTask;
 	tags: string[];
 	children: TaskTreeNode[];
+	nonce?: string;
 }
 
 export interface BuildTreeOpts {
@@ -51,10 +91,17 @@ export function buildOmniAutomationUrlTree(opts: BuildTreeOpts): string {
 	const { root, project, obsidianUrl } = opts;
 	const lines: string[] = [];
 	let counter = 0;
+	const wantsCallback = root.nonce !== undefined;
+	if (wantsCallback) lines.push("const __t2of_cb = [];");
 
 	function emit(node: TaskTreeNode, parentVar: string | null): string {
 		const v = `t${counter++}`;
 		emitTaskLines(lines, v, node.task, node.tags, obsidianUrl, parentVar);
+		if (wantsCallback && node.nonce) {
+			lines.push(
+				`__t2of_cb.push({ nonce: ${JSON.stringify(node.nonce)}, result: "omnifocus:///task/" + ${v}.id.primaryKey });`
+			);
+		}
 		for (const child of node.children) emit(child, v);
 		return v;
 	}
@@ -63,6 +110,11 @@ export function buildOmniAutomationUrlTree(opts: BuildTreeOpts): string {
 	if (project) {
 		lines.push(
 			`{ const p = flattenedProjects.byName(${JSON.stringify(project)}); if (p) moveTasks([${rootVar}], p); }`
+		);
+	}
+	if (wantsCallback) {
+		lines.push(
+			`if (__t2of_cb.length > 0) { URL.fromString("obsidian://${CALLBACK_ACTION}?batch=" + encodeURIComponent(JSON.stringify(__t2of_cb))).open(); }`
 		);
 	}
 	const script = `(() => {\n${lines.join("\n")}\n})()`;
@@ -81,7 +133,7 @@ export function buildPluginInvocationUrlTree(opts: BuildTreeOpts): string {
 function nodeToPayload(node: TaskTreeNode, obsidianUrl: string): Record<string, unknown> {
 	const { task, tags } = node;
 	const noteParts: string[] = [];
-	const trimmedBody = task.body.trim();
+	const trimmedBody = stripBacklinkMarkers(task.body.trim());
 	if (trimmedBody) noteParts.push(trimmedBody);
 	noteParts.push(obsidianUrl);
 
@@ -96,6 +148,7 @@ function nodeToPayload(node: TaskTreeNode, obsidianUrl: string): Record<string, 
 	if (task.fields.flag) payload.flag = true;
 	if (task.fields.estimate !== undefined) payload.estimate = task.fields.estimate;
 	if (task.fields.repeat) payload.repeat = task.fields.repeat;
+	if (node.nonce) payload.nonce = node.nonce;
 	if (node.children.length > 0) {
 		payload.children = node.children.map((c) => nodeToPayload(c, obsidianUrl));
 	}
@@ -111,7 +164,7 @@ function emitTaskLines(
 	parentVar: string | null
 ): void {
 	const noteParts: string[] = [];
-	const trimmedBody = task.body.trim();
+	const trimmedBody = stripBacklinkMarkers(task.body.trim());
 	if (trimmedBody) noteParts.push(trimmedBody);
 	noteParts.push(obsidianUrl);
 	const note = noteParts.join("\n\n");

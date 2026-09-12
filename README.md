@@ -69,7 +69,7 @@ With **Preserve task hierarchy** enabled and a hierarchy-capable send mode (Omni
 
 ## Settings
 
-Settings are grouped under four headings. On Obsidian 1.13 and later they are also
+Settings are grouped under five headings. On Obsidian 1.13 and later they are also
 indexed by the settings search box, so you can jump straight to one by typing its name
 (or a related term such as "subtasks", "autosave", or "x-callback").
 
@@ -96,6 +96,13 @@ indexed by the settings search box, so you can jump straight to one by typing it
 | Preserve task hierarchy | off | When on, nested checkboxes become real OmniFocus subtasks (in OmniAutomation or Plug-in send mode). URL scheme mode falls back to today's body-folding with a Notice. |
 | Forward inline `#tags` | off | When on, `#tags` written on a task line are appended to the OmniFocus tag list. |
 
+**Backlinks**
+
+| Setting | Default | Notes |
+|---|---|---|
+| Add OmniFocus backlink | off | When on, once OmniFocus confirms a task was created, a link to it is inserted back into the task's line in Obsidian, e.g. `[🔗](omnifocus:///task/…)`. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in (see below). While the link is pending, a hidden `%%t2of-…%%` marker sits at the end of the line — invisible outside of source mode, and safe to delete by hand if a send is abandoned before OmniFocus calls back. |
+| Backlink label | 🔗 | Text or emoji used as the link's clickable label. Cannot be empty. |
+
 ## Send modes
 
 Three modes are available in settings. The default (URL scheme) works everywhere with no security prompts but cannot set `plannedDate` or repeating rules. Tasks that need those fields are routed through OmniAutomation per-task; plain tasks always use the URL scheme.
@@ -120,6 +127,8 @@ The plug-in mode ships a small companion plug-in that lives inside OmniFocus. Ap
 4. **Approve once.** Send a task with a `planned::` or `repeat::` field. OmniFocus shows its security prompt for the bootstrap script — scroll to the bottom and click **Approve**. Future sends with planned/repeat run silently.
 
 If a future plugin update changes the bootstrap script, OmniFocus will prompt for re-approval the next time it runs.
+
+**Backlink support requires reinstalling the companion plug-in.** If "Add OmniFocus backlink" is on but you're still running an older copy of `omnifocus-task-sync.omnifocusjs`, tasks are still created normally — you just won't get a link back, and the line's `%%t2of-…%%` marker will sit there indefinitely. Repeat step 2 above with the latest file to fix this; it does not require re-approval (the bootstrap script itself is unchanged).
 
 ## Bad input
 
