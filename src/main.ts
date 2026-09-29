@@ -113,7 +113,11 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 		const baseTags = this.resolveTags(file);
 		const project = this.resolveProject(file);
 		const obsidianUrl = buildObsidianUrl(this.app.vault.getName(), file.path);
-		const autosave = this.settings.skipQuickEntry;
+		// OmniFocus doesn't reliably deliver the x-success callback when Quick
+		// Entry is shown for interactive review — only the direct/autosave add
+		// path fires it (confirmed empirically). Force it on whenever a task
+		// might get a backlink so the round trip actually completes.
+		const autosave = this.settings.skipQuickEntry || this.settings.addOmnifocusBacklink;
 
 		const omniJsModeAvailable =
 			(this.settings.sendMode === "omnijs" || this.settings.sendMode === "plugin") &&

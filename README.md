@@ -92,7 +92,7 @@ indexed by the settings search box, so you can jump straight to one by typing it
 | Setting | Default | Notes |
 |---|---|---|
 | Send mode | URL scheme | See [Send modes](#send-modes) below. |
-| Skip OmniFocus Quick Entry | off | When on, tasks are saved straight to their destination via `autosave=true` instead of opening the Quick Entry window. Greyed out on macOS in OmniAutomation and Plug-in modes, which never open Quick Entry. |
+| Skip OmniFocus Quick Entry | off | When on, tasks are saved straight to their destination via `autosave=true` instead of opening the Quick Entry window. Greyed out on macOS in OmniAutomation and Plug-in modes, which never open Quick Entry — and whenever "Add OmniFocus backlink" is on, which forces it on regardless (see below). |
 | Preserve task hierarchy | off | When on, nested checkboxes become real OmniFocus subtasks (in OmniAutomation or Plug-in send mode). URL scheme mode falls back to today's body-folding with a Notice. |
 | Forward inline `#tags` | off | When on, `#tags` written on a task line are appended to the OmniFocus tag list. |
 
@@ -100,7 +100,7 @@ indexed by the settings search box, so you can jump straight to one by typing it
 
 | Setting | Default | Notes |
 |---|---|---|
-| Add OmniFocus backlink | off | When on, once OmniFocus confirms a task was created, a link to it is inserted back into the task's line in Obsidian, e.g. `[🔗](omnifocus:///task/…)`. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in (see below). While the link is pending, a hidden `%%t2of-…%%` marker sits at the end of the line — invisible outside of source mode, and safe to delete by hand if a send is abandoned before OmniFocus calls back. |
+| Add OmniFocus backlink | off | When on, once OmniFocus confirms a task was created, a link to it is inserted back into the task's line in Obsidian, e.g. `[🔗](omnifocus:///task/…)`. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in (see below). While the link is pending, a hidden `%%t2of-…%%` marker sits at the end of the line — invisible outside of source mode, and safe to delete by hand if a send is abandoned before OmniFocus calls back. **Forces "Skip OmniFocus Quick Entry" on** for URL-scheme sends: OmniFocus doesn't reliably deliver the callback when Quick Entry is shown for manual review, only on the direct/autosave add path, so the setting is overridden automatically to keep the backlink working. |
 | Backlink label | 🔗 | Text or emoji used as the link's clickable label. Cannot be empty. |
 
 ## Send modes

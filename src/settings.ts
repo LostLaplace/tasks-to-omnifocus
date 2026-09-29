@@ -160,16 +160,20 @@ export class SettingsTab extends PluginSettingTab {
 					},
 					{
 						name: "Skip OmniFocus Quick Entry",
-						desc: "Save tasks straight to their destination instead of opening the Quick Entry window for each one. No effect in OmniAutomation or Plug-in mode (Quick Entry is never opened there).",
+						desc: "Save tasks straight to their destination instead of opening the Quick Entry window for each one. No effect in OmniAutomation or Plug-in mode (Quick Entry is never opened there). Forced on automatically whenever \"Add OmniFocus backlink\" is on — OmniFocus doesn't reliably deliver the backlink callback when Quick Entry is shown for review.",
 						aliases: ["autosave", "quick entry", "prompt"],
 						control: {
 							type: "toggle",
 							key: "skipQuickEntry",
 							// Quick Entry is never opened in omnijs/plug-in mode, but those
 							// modes only take effect on macOS (main.ts gates them on
-							// Platform.isMacOS), so on iOS autosave is still in play.
+							// Platform.isMacOS), so on iOS autosave is still in play. Also
+							// forced on (main.ts) whenever addOmnifocusBacklink is on, since
+							// OmniFocus doesn't deliver x-success through a manual Quick
+							// Entry save — greyed out here so that's visible either way.
 							disabled: () =>
-								Platform.isMacOS && this.plugin.settings.sendMode !== "url",
+								this.plugin.settings.addOmnifocusBacklink ||
+								(Platform.isMacOS && this.plugin.settings.sendMode !== "url"),
 						},
 					},
 					{
@@ -192,7 +196,7 @@ export class SettingsTab extends PluginSettingTab {
 				items: [
 					{
 						name: "Add OmniFocus backlink",
-						desc: "After OmniFocus confirms a task was created, insert a link to it back into the task's line in Obsidian. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in.",
+						desc: "After OmniFocus confirms a task was created, insert a link to it back into the task's line in Obsidian. Works with all three send modes; Plug-in mode requires reinstalling the companion plug-in. Forces \"Skip OmniFocus Quick Entry\" on for URL-scheme sends, since OmniFocus doesn't deliver the backlink callback through a manual Quick Entry save.",
 						aliases: ["backlink", "callback", "link back", "round trip", "x-success", "return link"],
 						control: { type: "toggle", key: "addOmnifocusBacklink" },
 					},
