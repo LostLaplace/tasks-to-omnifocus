@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.8.0
 
 - New **Ignored tags** setting: unchecked tasks tagged with a listed tag (e.g. `#agenda/dan` with `agenda`) are skipped by every send command and by "Mark all tasks complete", and stay unchecked.
 
