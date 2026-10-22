@@ -33,11 +33,22 @@ export interface ParsedTask {
 
 export interface ParseOptions {
 	preserveHierarchy?: boolean;
+	/** Tags (without `#`) whose tasks are skipped. `agenda` also matches `#agenda/dan`. */
+	ignoredTags?: string[];
 }
 
 const CHECKBOX_RE = /^(\s*)(?:[-*+]|\d+\.)\s+\[([ xX])\]\s+(.*)$/;
 const DV_FIELD_RE = /\[([a-zA-Z][a-zA-Z0-9_-]*)\s*::\s*([^\]]+)\]/g;
 const INLINE_TAG_RE = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
+
+function hasIgnoredTag(text: string, ignoredTags: string[]): boolean {
+	if (ignoredTags.length === 0) return false;
+	for (const m of text.matchAll(INLINE_TAG_RE)) {
+		const tag = m[2].toLowerCase();
+		if (ignoredTags.some((ig) => tag === ig || tag.startsWith(ig + "/"))) return true;
+	}
+	return false;
+}
 
 export function parseUncompletedTasks(
 	content: string,
@@ -46,6 +57,7 @@ export function parseUncompletedTasks(
 	const lines = content.split("\n");
 	const tasks: ParsedTask[] = [];
 	const preserveHierarchy = opts.preserveHierarchy === true;
+	const ignoredTags = (opts.ignoredTags ?? []).map((t) => t.toLowerCase());
 
 	let i = 0;
 	while (i < lines.length) {
@@ -55,15 +67,15 @@ export function parseUncompletedTasks(
 			continue;
 		}
 
-		const [, indent, state] = match;
+		const [, indent, state, rest] = match;
 		const taskIndent = indent.length;
 
-		if (state !== " ") {
+		if (state !== " " || hasIgnoredTag(rest, ignoredTags)) {
 			i = consumeIndentedBlock(lines, i + 1, taskIndent);
 			continue;
 		}
 
-		i = parseTaskAt(lines, i, taskIndent, undefined, preserveHierarchy, tasks);
+		i = parseTaskAt(lines, i, taskIndent, undefined, preserveHierarchy, tasks, ignoredTags);
 	}
 
 	return tasks;
@@ -75,7 +87,8 @@ function parseTaskAt(
 	taskIndent: number,
 	parentLineNumber: number | undefined,
 	preserveHierarchy: boolean,
-	tasks: ParsedTask[]
+	tasks: ParsedTask[],
+	ignoredTags: string[]
 ): number {
 	const match = lines[startIdx].match(CHECKBOX_RE);
 	if (!match) return startIdx + 1;
@@ -98,7 +111,7 @@ function parseTaskAt(
 		};
 		tasks.push(task);
 
-		end = walkHierarchical(lines, startIdx + 1, taskIndent, startIdx, tasks, bodyLines);
+		end = walkHierarchical(lines, startIdx + 1, taskIndent, startIdx, tasks, bodyLines, ignoredTags);
 
 		const parsed = parseTaskLine(rest);
 		task.title = parsed.title;
@@ -133,7 +146,8 @@ function walkHierarchical(
 	parentIndent: number,
 	parentLine: number,
 	tasks: ParsedTask[],
-	bodyLines: string[]
+	bodyLines: string[],
+	ignoredTags: string[]
 ): number {
 	let j = startIdx;
 	while (j < lines.length) {
@@ -151,8 +165,8 @@ function walkHierarchical(
 		const childMatch = line.match(CHECKBOX_RE);
 		if (childMatch) {
 			const childIndent = childMatch[1].length;
-			if (childMatch[2] === " ") {
-				j = parseTaskAt(lines, j, childIndent, parentLine, true, tasks);
+			if (childMatch[2] === " " && !hasIgnoredTag(childMatch[3], ignoredTags)) {
+				j = parseTaskAt(lines, j, childIndent, parentLine, true, tasks, ignoredTags);
 				continue;
 			}
 			j = consumeIndentedBlock(lines, j + 1, childIndent);

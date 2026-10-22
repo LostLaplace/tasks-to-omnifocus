@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- New **Ignored tags** setting: unchecked tasks tagged with a listed tag (e.g. `#agenda/dan` with `agenda`) are skipped by every send command and by "Mark all tasks complete", and stay unchecked.
+
 ## 0.7.0
 
 - Settings are now declared with Obsidian 1.13's declarative settings API (`getSettingDefinitions()`), so every setting appears in the settings search box. Search aliases were added so terms like "subtasks", "autosave", "x-callback", and "yaml" find the right setting.

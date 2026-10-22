@@ -95,6 +95,7 @@ indexed by the settings search box, so you can jump straight to one by typing it
 | Skip OmniFocus Quick Entry | off | When on, tasks are saved straight to their destination via `autosave=true` instead of opening the Quick Entry window. Greyed out on macOS in OmniAutomation and Plug-in modes, which never open Quick Entry — and whenever "Add OmniFocus backlink" is on, which forces it on regardless (see below). |
 | Preserve task hierarchy | off | When on, nested checkboxes become real OmniFocus subtasks (in OmniAutomation or Plug-in send mode). URL scheme mode falls back to today's body-folding with a Notice. |
 | Forward inline `#tags` | off | When on, `#tags` written on a task line are appended to the OmniFocus tag list. |
+| Ignored tags | (empty) | Comma-separated tags (no `#`). Unchecked tasks with a matching tag are never sent or marked complete. A parent tag matches its children (`agenda` ignores `#agenda/dan`). Nested ignored tasks are only skipped when **Preserve task hierarchy** is on. |
 
 **Backlinks**
 

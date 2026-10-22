@@ -55,7 +55,7 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 			id: "mark-all-tasks-complete",
 			name: "Mark all tasks complete (without sending)",
 			editorCallback: (editor: Editor) => {
-				const tasks = parseUncompletedTasks(editor.getValue());
+				const tasks = parseUncompletedTasks(editor.getValue(), { ignoredTags: this.ignoredTagList() });
 				if (tasks.length === 0) {
 					new Notice("No uncompleted tasks in this note.");
 					return;
@@ -70,6 +70,13 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 		this.registerObsidianProtocolHandler(CALLBACK_ACTION, (params) => {
 			void this.handleOmnifocusCallback(params);
 		});
+	}
+
+	ignoredTagList(): string[] {
+		return this.settings.ignoredTags
+			.split(",")
+			.map((t) => t.trim().replace(/^#/, ""))
+			.filter((t) => t.length > 0);
 	}
 
 	async loadSettings() {
@@ -94,7 +101,10 @@ export default class TasksToOmnifocusPlugin extends Plugin {
 
 		const scope = opts.scope ?? "all";
 		const preserveHierarchy = this.settings.preserveHierarchy;
-		const allTasks = parseUncompletedTasks(editor.getValue(), { preserveHierarchy });
+		const allTasks = parseUncompletedTasks(editor.getValue(), {
+			preserveHierarchy,
+			ignoredTags: this.ignoredTagList(),
+		});
 		let tasks = filterTasksByScope(allTasks, editor, scope);
 		if (preserveHierarchy) {
 			tasks = expandScopeWithDescendants(allTasks, tasks);
