@@ -18,6 +18,7 @@ export interface PluginSettings {
 	tagsFrontmatterKey: string;
 	projectFrontmatterKey: string;
 	appendInlineTagsAsOmnifocusTags: boolean;
+	ignoredTags: string;
 	skipQuickEntry: boolean;
 	sendMode: SendMode;
 	preserveHierarchy: boolean;
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	tagsFrontmatterKey: "omnifocus_tags",
 	projectFrontmatterKey: "omnifocus_project",
 	appendInlineTagsAsOmnifocusTags: false,
+	ignoredTags: "",
 	skipQuickEntry: false,
 	sendMode: "url",
 	preserveHierarchy: false,
@@ -187,6 +189,12 @@ export class SettingsTab extends PluginSettingTab {
 						desc: "When enabled, #tags written on the task line are added as OmniFocus tags (combined with default/frontmatter tags).",
 						aliases: ["hashtag", "inline tags"],
 						control: { type: "toggle", key: "appendInlineTagsAsOmnifocusTags" },
+					},
+					{
+						name: "Ignored tags",
+						desc: "Comma-separated tags (without #). Unchecked tasks carrying one of these tags are never sent or marked complete. A parent tag also matches its children, e.g. \"agenda\" ignores #agenda/dan.",
+						aliases: ["exclude", "skip", "filter", "agenda"],
+						control: { type: "text", key: "ignoredTags", placeholder: "agenda, someday" },
 					},
 				],
 			},
